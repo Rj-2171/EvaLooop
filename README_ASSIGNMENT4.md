@@ -2,15 +2,15 @@
 
 Richa Jha (rjha3@ncsu.edu), CSC 591/791 Trustworthy AI for SE
 
-**Public fork:** https://github.com/Rj-2171/EvaLooop.git
+**Public fork:** https://github.com/Rj-2171/EvaLooop (default branch `dev`, based on upstream commit `ce22fe2`)
 
 ## What this adds
 
 A new loop type (Option B): code to a one-sentence **Hindi** summary to code. Everything except the summary language is the same as the standard loop: same generation prompt, same one-sentence summary instruction (with the opener translated), same docstring wrapper, and the same retained assert line from the original MBPP+ prompt, which keeps the function name and signature fixed. Cycle 1 uses the original English prompt, so the model's own output is the only perturbation.
 
-Summarization prompt:
+Summarization prompt (`{code}` is replaced by the generated code):
 
-```
+````
 Use one sentence to summarize the following code in Hindi and start with 'एक पायथन फ़ंक्शन लिखें जो':
 
 ```
@@ -20,7 +20,7 @@ Use one sentence to summarize the following code in Hindi and start with 'एक
 ```
 एक पायथन फ़ंक्शन लिखें जो
 ```
-```
+````
 
 ## Changes to the framework
 
