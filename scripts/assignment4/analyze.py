@@ -28,6 +28,8 @@ def load_runs(results_dir):
         info = data.get("model_info", {})
         model = info.get("model_id") or data["model"]
         conf = "standard-mbpp-plus" if cfg.get("loop", "standard") == "standard" else f"{cfg['summary_language']}-summary-mbpp-plus"
+        if cfg.get("strip_summary_code"):
+            conf += "-codestripped"
         runs.append({"path": path.name, "model": model, "configuration": conf, "data": data,
                      "cycles": {r["task_id"]: r["successful_cycles"] for r in data["prompt_results"]}})
     return runs

@@ -55,6 +55,9 @@ class EvaluationConfig:
     # in summary_language)
     loop: str = "standard"
     summary_language: str = "hindi"
+    # Remove fenced code blocks from summaries before they become the next prompt (off by
+    # default, which keeps upstream behavior)
+    strip_summary_code: bool = False
 
     # Task subset: a file with one task id per line, or a seeded random sample of n_tasks
     task_ids_file: Optional[str] = None
@@ -119,6 +122,8 @@ class EvaluationConfig:
         model_name = self._sanitize_model_name(self.model)
         
         loop = self.loop if self.loop == "standard" else f"{self.loop}_{self.summary_language}"
+        if self.strip_summary_code:
+            loop += "_stripcode"
         return f"evaloop_{model_name}_{self.dataset}_{loop}_{timestamp}"
     
     def _sanitize_model_name(self, model_name: str) -> str:
@@ -141,6 +146,7 @@ class EvaluationConfig:
         return {
             "loop": self.loop,
             "summary_language": self.summary_language if self.loop == "multilingual" else None,
+            "strip_summary_code": self.strip_summary_code,
             "task_ids_file": self.task_ids_file,
             "n_tasks": self.n_tasks,
             "subset_seed": self.subset_seed,
@@ -482,6 +488,7 @@ class EvaluationConfig:
                 {
                     "type": "code_summarization", 
                     "prompt_template": "Use one sentence to summarize the following code and start with 'write a python function to':\n\n```\n{code}\n```\n\n```\nwrite a python function to\n```",
+                    "strip_code": self.strip_summary_code,
                 },
             ]
         elif task_type == "code_generation_multilingual_summarization":
@@ -490,7 +497,8 @@ class EvaluationConfig:
             generation, _ = self.get_task_configs("code_generation_summarization")
             return [
                 generation,
-                {"type": "multilingual_summarization", "summary_language": self.summary_language},
+                {"type": "multilingual_summarization", "summary_language": self.summary_language,
+                 "strip_code": self.strip_summary_code},
             ]
         elif task_type == "code_translation":
             # Code translation is not currently supported but kept as interface

@@ -1,7 +1,22 @@
+import re
 from typing import Dict, Any
 
 from .base import BaseTask
 from .factory import register_task
+
+_FENCE = re.compile(r"```[^\n]*\n?(.*?)(?:```|$)", re.S)
+
+
+def strip_code_blocks(text: str) -> str:
+    """Remove fenced code blocks from a summary, keeping the prose around them.
+
+    Some models paste the solution into the "summary"; the next cycle can then copy the code
+    and the natural-language description no longer has to carry the task. If nothing but
+    fenced content is left, the fence markers are dropped instead so the text is kept.
+    """
+    prose = _FENCE.sub("", text)
+    prose = re.sub(r"\n{3,}", "\n\n", prose).strip()
+    return prose if prose else _FENCE.sub(lambda m: m.group(1), text).strip()
 
 
 @register_task("code_summarization")
@@ -33,6 +48,8 @@ class CodeSummarizationTask(BaseTask):
         prompt layout, where the last line is the closing quotes and the
         second-to-last is an assert statement.
         """
+        if self.task_config.get("strip_code"):
+            output = strip_code_blocks(output)
         try:
             assert_code = context.get("cycle_input", "").splitlines()[-2]
         except IndexError:

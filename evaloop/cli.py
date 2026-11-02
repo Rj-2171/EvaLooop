@@ -94,6 +94,7 @@ class EvaLoopCLI:
         system_prompt: str = "You are a helpful programming assistant.",
         loop: str = "standard",
         summary_language: str = "hindi",
+        strip_summary_code: bool = False,
         task_ids_file: Optional[str] = None,
         n_tasks: Optional[int] = None,
         subset_seed: int = 0,
@@ -145,6 +146,8 @@ class EvaLoopCLI:
             loop: "standard" (code <-> English summary) or "multilingual"
                   (code <-> one-sentence summary written in summary_language).
             summary_language: Summary language for the multilingual loop (hindi, chinese, spanish).
+            strip_summary_code: Remove fenced code blocks from summaries before they are fed
+                back (prevents code leaking through the summary; off by default).
             task_ids_file: File with one MBPP+ task id per line; restricts the run to those tasks.
             n_tasks: Evaluate a seeded random sample of this many tasks instead.
             subset_seed: Seed for the n_tasks sample.
@@ -236,6 +239,7 @@ class EvaLoopCLI:
             openai_api_key=openai_api_key,
             loop=loop,
             summary_language=str(summary_language).lower(),
+            strip_summary_code=strip_summary_code,
             task_ids_file=task_ids_file,
             n_tasks=n_tasks,
             subset_seed=subset_seed,

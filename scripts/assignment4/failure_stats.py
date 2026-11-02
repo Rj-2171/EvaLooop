@@ -54,8 +54,11 @@ def visible_assert(code, assert_line):
 
 
 def run_name(data):
-    loop = data.get("config", {}).get("loop", "standard")
-    return f"{data['model_info']['model_id']} | {'standard' if loop == 'standard' else 'hindi'}"
+    cfg = data.get("config", {})
+    name = "standard" if cfg.get("loop", "standard") == "standard" else "hindi"
+    if cfg.get("strip_summary_code"):
+        name += "-codestripped"
+    return f"{data['model_info']['model_id']} | {name}"
 
 
 def main():
@@ -81,6 +84,7 @@ def main():
                     s["summaries"] += 1
                     s["summary_words"] += len(text.split())
                     s["degenerate_summaries"] += degenerate(text)
+                    s["summaries_with_code_block"] += "```" in (c.get("task_2_raw_output") or "")
                     if TRIANGLE.search(text) and "triang" not in pr["initial_prompt"].lower():
                         s["triangle_word_unrelated_task"] += 1
             sc = pr["successful_cycles"]
@@ -111,12 +115,17 @@ def main():
         s["mean_summary_words"] = round(s["summary_words"] / max(1, s["summaries"]), 1)
         stats[name] = dict(sorted(s.items()))
 
-    models = sorted({n.split(" | ")[0] for n in runs})
     stats["hindi_survived_longer_than_standard"] = {}
-    for m in models:
-        std = {p["task_id"]: p["successful_cycles"] for p in runs[f"{m} | standard"]["prompt_results"]}
-        hin = {p["task_id"]: p["successful_cycles"] for p in runs[f"{m} | hindi"]["prompt_results"]}
-        stats["hindi_survived_longer_than_standard"][m] = [t for t in std if hin[t] > std[t] >= 1]
+    for name in runs:
+        m, conf = name.split(" | ")
+        if not conf.startswith("hindi"):
+            continue
+        base = runs.get(f"{m} | {conf.replace('hindi', 'standard')}")
+        if base is None:
+            continue
+        std = {p["task_id"]: p["successful_cycles"] for p in base["prompt_results"]}
+        hin = {p["task_id"]: p["successful_cycles"] for p in runs[name]["prompt_results"]}
+        stats["hindi_survived_longer_than_standard"][name] = [t for t in std if hin[t] > std[t] >= 1]
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(stats, indent=2, ensure_ascii=False))
