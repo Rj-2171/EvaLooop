@@ -127,6 +127,28 @@ def main():
         hin = {p["task_id"]: p["successful_cycles"] for p in runs[name]["prompt_results"]}
         stats["hindi_survived_longer_than_standard"][name] = [t for t in std if hin[t] > std[t] >= 1]
 
+    # Confound check: is the Hindi drop still there on tasks whose Hindi summaries never
+    # degenerated (clean), and on those whose summaries all stayed short (<= 25 words)?
+    stats["confound_check_survive10"] = {}
+    for name in runs:
+        m, conf = name.split(" | ")
+        base = runs.get(f"{m} | {conf.replace('hindi', 'standard')}")
+        if not conf.startswith("hindi") or base is None:
+            continue
+        std = {p["task_id"]: p for p in base["prompt_results"]}
+        hin = {p["task_id"]: p for p in runs[name]["prompt_results"]}
+        both = [t for t in std if std[t]["successful_cycles"] >= 1 and hin[t]["successful_cycles"] >= 1]
+        summaries = {t: [summary_body(c["task_2_output"]) for c in hin[t]["cycles"] if c.get("task_2_output")] for t in both}
+        clean = [t for t in both if not any(degenerate(x) for x in summaries[t])]
+        short = [t for t in clean if all(len(x.split()) <= 25 for x in summaries[t])]
+        out = {}
+        for label, ids in (("all", both), ("clean", clean), ("short", short)):
+            s10 = sum(std[t]["successful_cycles"] == M for t in ids) / max(1, len(ids))
+            h10 = sum(hin[t]["successful_cycles"] == M for t in ids) / max(1, len(ids))
+            out[label] = {"n": len(ids), "standard": round(s10, 3), "hindi": round(h10, 3),
+                          "relative_drop": round((s10 - h10) / s10, 3) if s10 else None}
+        stats["confound_check_survive10"][name] = out
+
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(stats, indent=2, ensure_ascii=False))
     print(json.dumps(stats, indent=2, ensure_ascii=False))
