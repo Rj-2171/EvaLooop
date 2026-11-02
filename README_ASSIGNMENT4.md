@@ -2,7 +2,7 @@
 
 Richa Jha (rjha3@ncsu.edu), CSC 591/791 Trustworthy AI for SE
 
-**Public fork:** FORK_URL_HERE (based on upstream commit `ce22fe2`)
+**Public fork:** https://github.com/Rj-2171/EvaLooop.git (based on upstream commit `ce22fe2`)
 
 ## What this adds
 
