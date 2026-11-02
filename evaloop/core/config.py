@@ -50,6 +50,29 @@ class EvaluationConfig:
     
     # API configuration
     openai_api_key: Optional[str] = None
+
+    # Loop type: "standard" (code <-> English summary) or "multilingual" (code <-> summary
+    # in summary_language)
+    loop: str = "standard"
+    summary_language: str = "hindi"
+
+    # Task subset: a file with one task id per line, or a seeded random sample of n_tasks
+    task_ids_file: Optional[str] = None
+    n_tasks: Optional[int] = None
+    subset_seed: int = 0
+
+    # Local open-weight chat models: backend="local", engine "vllm" or "hf"
+    backend: Optional[str] = None
+    engine: str = "vllm"
+    hf_batch_size: int = 16
+
+    # Gemini (google-genai) configuration
+    vertex: bool = False
+    gcp_project: Optional[str] = None
+    gcp_location: str = "global"
+    concurrency: int = 8
+    thinking_budget: Optional[int] = None
+    thinking_level: Optional[str] = None
     
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -73,6 +96,9 @@ class EvaluationConfig:
         
         if self.max_model_len <= 0:
             raise ValueError("max_model_len must be positive")
+
+        if self.loop not in ("standard", "multilingual"):
+            raise ValueError("loop must be 'standard' or 'multilingual'")
         
         # Create output directory
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -92,7 +118,8 @@ class EvaluationConfig:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         model_name = self._sanitize_model_name(self.model)
         
-        return f"evaloop_{model_name}_{self.dataset}_{timestamp}"
+        loop = self.loop if self.loop == "standard" else f"{self.loop}_{self.summary_language}"
+        return f"evaloop_{model_name}_{self.dataset}_{loop}_{timestamp}"
     
     def _sanitize_model_name(self, model_name: str) -> str:
         """Sanitize model name for use in file names."""
@@ -103,9 +130,22 @@ class EvaluationConfig:
         # Replace problematic characters
         return model_name.replace("-", "_").replace(".", "_").lower()
     
+    def loop_task_type(self) -> str:
+        """Task-config key for the configured loop."""
+        if self.loop == "multilingual":
+            return "code_generation_multilingual_summarization"
+        return "code_generation_summarization"
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
+            "loop": self.loop,
+            "summary_language": self.summary_language if self.loop == "multilingual" else None,
+            "task_ids_file": self.task_ids_file,
+            "n_tasks": self.n_tasks,
+            "subset_seed": self.subset_seed,
+            "max_new_tokens": self.max_new_tokens,
+            "system_prompt": self.system_prompt,
             "model": self.model,
             "dataset": self.dataset,
             "languages": self.languages,
@@ -129,6 +169,34 @@ class EvaluationConfig:
     def _create_model_config(self, model: str) -> Dict[str, Any]:
         """Create configuration for a specific model."""
         # Determine model type based on model name/path
+        if self.backend == "local":
+            return {
+                "name": self._sanitize_model_name(model),
+                "type": "local_chat",
+                "path": model,
+                "engine": self.engine,
+                "max_new_tokens": self.max_new_tokens,
+                "max_model_len": self.max_model_len,
+                "system_prompt": self.system_prompt,
+                "hf_batch_size": self.hf_batch_size,
+                "gpu_memory_utilization": self.gpu_memory_utilization,
+            }
+        if "gemini" in model.lower() and "/" not in model:
+            return {
+                "name": self._sanitize_model_name(model),
+                "type": "gemini",
+                "model_id": model,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "max_new_tokens": self.max_new_tokens,
+                "system_prompt": self.system_prompt,
+                "vertex": self.vertex,
+                "gcp_project": self.gcp_project,
+                "gcp_location": self.gcp_location,
+                "concurrency": self.concurrency,
+                "thinking_budget": self.thinking_budget,
+                "thinking_level": self.thinking_level,
+            }
         if any(provider in model.lower() for provider in ["gpt", "chatgpt", "openai"]):
             model_type = "openai"
         elif "claude" in model.lower():
@@ -415,6 +483,14 @@ class EvaluationConfig:
                     "type": "code_summarization", 
                     "prompt_template": "Use one sentence to summarize the following code and start with 'write a python function to':\n\n```\n{code}\n```\n\n```\nwrite a python function to\n```",
                 },
+            ]
+        elif task_type == "code_generation_multilingual_summarization":
+            # Identical to the standard loop except that summaries are written in
+            # summary_language (see evaloop/tasks/multilingual_summarization.py)
+            generation, _ = self.get_task_configs("code_generation_summarization")
+            return [
+                generation,
+                {"type": "multilingual_summarization", "summary_language": self.summary_language},
             ]
         elif task_type == "code_translation":
             # Code translation is not currently supported but kept as interface

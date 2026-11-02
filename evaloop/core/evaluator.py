@@ -2,6 +2,7 @@
 
 import json
 import logging
+import random
 from typing import Dict, Any, List
 from pathlib import Path
 
@@ -51,9 +52,11 @@ class EvaLoopEvaluator:
         
         # Run evaluation
         model_result = self._run_evaluation_cycles(model, tasks, prompts, py_problems, tester)
-        
+        if hasattr(model, "describe"):
+            model_result["model_info"] = model.describe()
+
         # Save and return results
-        self._save_results([model_result], "code_generation_summarization")
+        self._save_results([model_result], self.config.loop_task_type())
         return [model_result]
     
     def run_code_translation(self) -> Dict[str, Any]:
@@ -77,7 +80,7 @@ class EvaLoopEvaluator:
     
     def _create_tasks(self):
         """Create task instances."""
-        task_configs = self.config.get_task_configs("code_generation_summarization")
+        task_configs = self.config.get_task_configs(self.config.loop_task_type())
         tasks = [self.task_factory.create_task(config) for config in task_configs]
         self.logger.info(f"Created {len(tasks)} tasks for evaluation")
         return tasks
@@ -95,8 +98,22 @@ class EvaLoopEvaluator:
                 "prompt": problem["prompt"]
             })
         
+        prompts = self._select_subset(prompts)
         self.logger.info(f"Prepared {len(prompts)} prompts from MBPP dataset")
         return prompts, py_problems
+
+    def _select_subset(self, prompts):
+        """Restrict to task_ids_file, or to a seeded random sample of n_tasks (kept in dataset order)."""
+        if self.config.task_ids_file:
+            wanted = {line.strip() for line in Path(self.config.task_ids_file).read_text().splitlines() if line.strip()}
+            missing = wanted - {p["task_id"] for p in prompts}
+            if missing:
+                raise ValueError(f"Unknown task ids in {self.config.task_ids_file}: {sorted(missing)[:5]}")
+            return [p for p in prompts if p["task_id"] in wanted]
+        if self.config.n_tasks and self.config.n_tasks < len(prompts):
+            chosen = set(random.Random(self.config.subset_seed).sample(range(len(prompts)), self.config.n_tasks))
+            return [p for i, p in enumerate(prompts) if i in chosen]
+        return prompts
     
     def _create_tester(self, py_problems):
         """Create the code tester."""
@@ -128,6 +145,9 @@ class EvaLoopEvaluator:
             current_prompts = self._process_cycle_results(
                 cycle_output, model_result, tasks, py_problems, tester, current_cycle
             )
+            self.logger.info(f"Cycle {current_cycle}: {len(current_prompts)} tasks still alive")
+            # Checkpoint so an interrupted run (e.g. a Colab disconnect) keeps finished cycles
+            self._save_results([model_result], self.config.loop_task_type() + "_partial")
             
             if not current_prompts:
                 self.logger.info(f"All prompts failed or completed after cycle {current_cycle}")
@@ -144,6 +164,7 @@ class EvaLoopEvaluator:
             "model": str(model),
             # Loop budget M; needed by the analyzer to normalize the ASL metrics
             "max_cycles": self.config.max_cycles,
+            "config": self.config.to_dict(),
             "prompt_results": []
         }
         

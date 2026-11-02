@@ -92,6 +92,20 @@ class EvaLoopCLI:
         preferred_batch_size: int = 64,
         is_chat_model: bool = True,
         system_prompt: str = "You are a helpful programming assistant.",
+        loop: str = "standard",
+        summary_language: str = "hindi",
+        task_ids_file: Optional[str] = None,
+        n_tasks: Optional[int] = None,
+        subset_seed: int = 0,
+        vertex: bool = False,
+        gcp_project: Optional[str] = None,
+        gcp_location: str = "global",
+        concurrency: int = 8,
+        thinking_budget: Optional[int] = None,
+        thinking_level: Optional[str] = None,
+        backend: Optional[str] = None,
+        engine: str = "vllm",
+        hf_batch_size: int = 16,
     ) -> Dict[str, Any]:
         """
         Run code generation and summarization evaluation experiment.
@@ -128,6 +142,23 @@ class EvaLoopCLI:
             preferred_batch_size: Preferred batch size when auto-batching.
             is_chat_model: Whether the model is a chat/instruction-tuned model.
             system_prompt: System prompt for chat models.
+            loop: "standard" (code <-> English summary) or "multilingual"
+                  (code <-> one-sentence summary written in summary_language).
+            summary_language: Summary language for the multilingual loop (hindi, chinese, spanish).
+            task_ids_file: File with one MBPP+ task id per line; restricts the run to those tasks.
+            n_tasks: Evaluate a seeded random sample of this many tasks instead.
+            subset_seed: Seed for the n_tasks sample.
+            vertex: For Gemini models, use Vertex AI (application default credentials)
+                    instead of a GEMINI_API_KEY.
+            gcp_project: GCP project for Vertex AI (default: GOOGLE_CLOUD_PROJECT).
+            gcp_location: Vertex AI location (default: global).
+            concurrency: Parallel API requests per cycle for Gemini models.
+            thinking_budget: Gemini 2.5 thinking budget (0 disables thinking).
+            thinking_level: Gemini 3.x thinking level (e.g. "minimal", "low").
+            backend: "local" runs an open-weight Hugging Face chat model on this machine
+                     with its chat template and greedy decoding (no API needed).
+            engine: Local inference engine, "vllm" (fast) or "hf" (transformers).
+            hf_batch_size: Prompts per generate call for engine "hf".
 
         Returns:
             Dictionary containing evaluation results with successful cycles for each task.
@@ -203,6 +234,20 @@ class EvaLoopCLI:
             is_chat_model=is_chat_model,
             system_prompt=system_prompt,
             openai_api_key=openai_api_key,
+            loop=loop,
+            summary_language=str(summary_language).lower(),
+            task_ids_file=task_ids_file,
+            n_tasks=n_tasks,
+            subset_seed=subset_seed,
+            vertex=vertex,
+            gcp_project=gcp_project,
+            gcp_location=gcp_location,
+            concurrency=concurrency,
+            thinking_budget=thinking_budget,
+            thinking_level=thinking_level,
+            backend=backend,
+            engine=engine,
+            hf_batch_size=hf_batch_size,
         )
         # Log model type detection results
         model_config = config.get_model_config()
@@ -214,8 +259,11 @@ class EvaLoopCLI:
                            f"batch_size={model_config['batch_config']['preferred_batch_size']}")
         elif model_type == "huggingface":
             self.logger.info(f"  HuggingFace config: device={model_config['device']}")
-        elif model_type in ["openai", "anthropic"]:
+        elif model_type == "local_chat":
+            self.logger.info(f"  Local chat model: engine={model_config['engine']}")
+        elif model_type in ["openai", "anthropic", "gemini"]:
             self.logger.info(f"  API config: model_id={model_config['model_id']}")
+        self.logger.info(f"Loop: {config.loop_task_type()}")
 
         # Create and run evaluator
         evaluator = EvaLoopEvaluator(config)

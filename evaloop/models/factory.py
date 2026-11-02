@@ -4,9 +4,9 @@ import logging
 from typing import Dict, Any
 
 from .base import BaseLLM
-from .open_source import HuggingFaceLLM
-from .open_source_vllm import VllmLLM
-from .closed_source import OpenAILLM
+
+# Backends are imported lazily: open_source_vllm raises ImportError when vLLM is missing
+# and open_source needs torch, so eager imports broke API-only installs.
 
 
 class ModelFactory:
@@ -43,11 +43,20 @@ class ModelFactory:
         self.logger.debug(f"Creating model with config: {sanitized_config}")
         
         if model_type in ["llama", "deepseek", "huggingface", "open_source"]:
+            from .open_source import HuggingFaceLLM
             return HuggingFaceLLM(model_config)
         elif model_type in ["vllm"]:
+            from .open_source_vllm import VllmLLM
             return VllmLLM(model_config)
         elif model_type in ["openai", "chatgpt", "closed_source"]:
+            from .closed_source import OpenAILLM
             return OpenAILLM(model_config)
+        elif model_type == "local_chat":
+            from .local_chat import LocalChatLLM
+            return LocalChatLLM(model_config)
+        elif model_type == "gemini":
+            from .gemini import GeminiLLM
+            return GeminiLLM(model_config)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
     
@@ -66,5 +75,7 @@ class ModelFactory:
             "vllm",
             "openai",
             "chatgpt",
-            "closed_source"
+            "closed_source",
+            "gemini",
+            "local_chat"
         ]
