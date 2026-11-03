@@ -135,7 +135,7 @@ Records are referenced as model, configuration, task_id and cycle (for example `
 
 ## Submission contents
 
-- `A4_report_Richa_Jha.pdf`: the report (3 pages).
+- `A4_report_rjha3.pdf`: the report (3 pages).
 - `README.md`: this file.
 - `evaloop_a4.patch`: diff against upstream `ce22fe2`.
 - `summary.csv`: one row per run.
